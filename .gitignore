@@ -1,18 +1,31 @@
+```
+# Dependencies
+target/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
 .idea/
-SWR.iml
-*.iml
-/out/
-/target/
-/**/target/
-.flattened-pom.xml
-dependency-reduced-pom.xml
-settings.xml
-.run/
 
-# BuildTools working directory
-BuildTools/
+# Compiled and build artifacts
+*.class
+*.jar
+*.war
+*.ear
+*.o
+*.obj
+*.so
+*.dll
+*.exe
 
-deploy.bat
-deploy-neux.ps1
-UltraSkyWars-Enhanced/
-aaold/
+# Original rules preserved
+*.log
+```

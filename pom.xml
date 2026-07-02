@@ -38,6 +38,7 @@
         <module>v1_20_R1</module>
         <module>v1_21_R1</module>
         <module>v26_1_R1</module>
+        <module>v26_2_R1</module>
         <module>mythicskywars-assembly</module>
     </modules>
 
@@ -119,6 +120,7 @@
             </activation>
             <modules>
                 <module>v26_1_R1</module>
+                <module>v26_2_R1</module>
             </modules>
         </profile>
     </profiles>
