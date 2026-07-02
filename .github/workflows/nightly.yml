@@ -16,44 +16,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 8
-
-      - name: Set up JDK 16
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 16
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
+      # =========================
+      # JDK ONLY ONCE (FIXED)
+      # =========================
       - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 25-ea
+          java-version: 25
+          cache: maven
 
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+      # =========================
+      # Install Spigot via BuildTools (CRITICAL FIX)
+      # =========================
+      - name: Install Spigot 26.2 (BuildTools)
+        run: |
+          mkdir -p $RUNNER_TEMP/buildtools
+          cd $RUNNER_TEMP/buildtools
 
+          curl -L -o BuildTools.jar https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
+
+          java -Xmx2G -jar BuildTools.jar --rev 26.2
+
+      # =========================
+      # Toolchains FIXED
+      # =========================
       - name: Configure Maven Toolchains
         run: |
           mkdir -p ~/.m2
@@ -62,32 +49,17 @@ jobs:
           <toolchains>
             <toolchain>
               <type>jdk</type>
-              <provides><version>1.8</version></provides>
-              <configuration><jdkHome>${{ env.JAVA_HOME_8_X64 }}</jdkHome></configuration>
-            </toolchain>
-            <toolchain>
-              <type>jdk</type>
-              <provides><version>16</version></provides>
-              <configuration><jdkHome>${{ env.JAVA_HOME_16_X64 }}</jdkHome></configuration>
-            </toolchain>
-            <toolchain>
-              <type>jdk</type>
-              <provides><version>17</version></provides>
-              <configuration><jdkHome>${{ env.JAVA_HOME_17_X64 }}</jdkHome></configuration>
-            </toolchain>
-            <toolchain>
-              <type>jdk</type>
-              <provides><version>21</version></provides>
-              <configuration><jdkHome>${{ env.JAVA_HOME_21_X64 }}</jdkHome></configuration>
-            </toolchain>
-            <toolchain>
-              <type>jdk</type>
               <provides><version>25</version></provides>
-              <configuration><jdkHome>${{ env.JAVA_HOME_25_X64 }}</jdkHome></configuration>
+              <configuration>
+                <jdkHome>${JAVA_HOME}</jdkHome>
+              </configuration>
             </toolchain>
           </toolchains>
           EOF
 
+      # =========================
+      # Versioning
+      # =========================
       - name: Generate nightly version
         id: version
         run: |
@@ -95,92 +67,81 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           NIGHTLY_VERSION="${BASE_VERSION}-nightly.${GITHUB_RUN_NUMBER}+${SHORT_SHA}"
           NIGHTLY_TAG="nightly-${GITHUB_RUN_NUMBER}"
+
           echo "version=${NIGHTLY_VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${NIGHTLY_TAG}" >> "$GITHUB_OUTPUT"
-          echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building nightly: ${NIGHTLY_VERSION} (tag: ${NIGHTLY_TAG})"
 
+      # =========================
+      # Build
+      # =========================
       - name: Build
-        run: mvn clean package -Drevision=${{ steps.version.outputs.version }} -B --no-transfer-progress -DskipTests -Daether.checksumPolicy=warn
+        run: |
+          mvn clean package \
+            -Drevision=${{ steps.version.outputs.version }} \
+            -B --no-transfer-progress \
+            -DskipTests
 
+      # =========================
+      # Detect JAR safely (FIXED)
+      # =========================
+      - name: Locate JAR
+        id: jar
+        run: |
+          JAR=$(find target -maxdepth 1 -type f -name "*.jar" ! -name "*sources*" ! -name "*javadoc*" | head -n 1)
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+          echo "Found jar: $JAR"
+
+      # =========================
+      # GitHub Release
+      # =========================
       - name: Create nightly release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "MythicSkywars Nightly #${{ github.run_number }} (${{ steps.version.outputs.version }})"
-          body: |
-            ## MythicSkywars Nightly Build
-
-            **Version:** `${{ steps.version.outputs.version }}`
-            **Commit:** ${{ github.sha }}
-            **Branch:** ${{ github.ref_name }}
-
-            ---
-
-            ⚠️ This is an automated nightly build. It may be unstable.
-            Use release builds for production servers.
-
-            ### Changes in this build
-            ${{ github.event.head_commit.message }}
+          name: "MythicSkywars Nightly #${{ github.run_number }}"
           prerelease: true
-          files: |
-            target/MythicSkywars-${{ steps.version.outputs.version }}.jar
+          files: ${{ steps.jar.outputs.jar }}
 
+      # =========================
+      # Modrinth Upload (FIXED)
+      # =========================
       - name: Upload nightly to Modrinth
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_API_KEY }}
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
         run: |
-          JAR_FILE="target/MythicSkywars-${{ steps.version.outputs.version }}.jar"
+          JAR="${{ steps.jar.outputs.jar }}"
           VERSION="${{ steps.version.outputs.version }}"
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -c 1000)
-
-          # Build the version metadata JSON
-          DATA=$(cat <<EOF
-          {
-            "name": "MythicSkywars Nightly #${{ github.run_number }}",
-            "version_number": "${VERSION}",
-            "changelog": $(echo "**Nightly Build** - may be unstable.\n\nCommit: ${{ github.sha }}\n\n${COMMIT_MSG}" | jq -Rs .),
-            "dependencies": [
-              {"project_id": "1u6JkXh5", "dependency_type": "required"},
-              {"project_id": "z4HZZnLr", "dependency_type": "required"},
-              {"project_id": "hXiIvTyT", "dependency_type": "optional"},
-              {"project_id": "lKEzGugV", "dependency_type": "optional"},
-              {"project_id": "w02MKsTg", "dependency_type": "optional"},
-              {"project_id": "3wmN97b8", "dependency_type": "optional"}
-            ],
-            "game_versions": ["1.8.9","1.9.4","1.10.2","1.11.2","1.12.2","1.13.2","1.14.4","1.15.2","1.16.5","1.17.1","1.18.2","1.19.4","1.20.6","1.21.11", "26.1.2", "26.1.1","26.1"],
-            "version_type": "alpha",
-            "loaders": ["bukkit","spigot","paper", "waterfall", "purpur"],
-            "featured": false,
-            "project_id": "${MODRINTH_PROJECT_ID}",
-            "file_parts": ["file"],
-            "primary_file": "file"
-          }
-          EOF
-          )
 
           curl -X POST "https://api.modrinth.com/v2/version" \
-            -H "Authorization: ${MODRINTH_TOKEN}" \
-            -H "User-Agent: MythicalSystems/MythicSkywars/${{ steps.version.outputs.version }} (github-actions)" \
-            -F "data=${DATA}" \
-            -F "file=@${JAR_FILE}" \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H "User-Agent: MythicSkywars/${VERSION}" \
+            -F "data={
+              \"name\": \"Nightly ${VERSION}\",
+              \"version_number\": \"${VERSION}\",
+              \"version_type\": \"alpha\",
+              \"loaders\": [\"spigot\",\"paper\",\"bukkit\"],
+              \"game_versions\": [\"26.2\"],
+              \"project_id\": \"${MODRINTH_PROJECT_ID}\",
+              \"dependencies\": []
+            }" \
+            -F "file=@${JAR}" \
             --fail-with-body
 
+      # =========================
+      # Update Modrinth Description
+      # =========================
       - name: Update Modrinth project description
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_API_KEY }}
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
         run: |
-          # Read the README.md as the project body
           BODY_CONTENT=$(cat README.md)
-
-          # Build the JSON payload with jq
-          PAYLOAD=$(jq -n --arg body "$BODY_CONTENT" '{ body: $body }')
+          PAYLOAD=$(jq -n --arg body "$BODY_CONTENT" '{body:$body}')
 
           curl -X PATCH "https://api.modrinth.com/v2/project/${MODRINTH_PROJECT_ID}" \
-            -H "Authorization: ${MODRINTH_TOKEN}" \
+            -H "Authorization: $MODRINTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -H "User-Agent: MythicalSystems/MythicSkywars/${{ steps.version.outputs.version }} (github-actions)" \
+            -H "User-Agent: MythicSkywars" \
             -d "$PAYLOAD" \
             --fail-with-body
