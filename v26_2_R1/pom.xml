@@ -1,0 +1,47 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>systems.mythical</groupId>
+        <artifactId>MythicSkywars</artifactId>
+        <version>${revision}</version>
+    </parent>
+    
+    <artifactId>v26_2_R1</artifactId>
+    <packaging>jar</packaging>
+    
+    <name>v26_2_R1</name>
+    
+    <properties>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+    </properties>
+    
+    <repositories>
+        <repository>
+            <id>spigot-repo</id>
+            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
+        </repository>
+    </repositories>
+    
+    <dependencies>
+        <dependency>
+            <groupId>org.spigotmc</groupId>
+            <artifactId>spigot</artifactId>
+            <version>26.2-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>systems.mythical</groupId>
+            <artifactId>MythicSkywarsCore</artifactId>
+            <version>${revision}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>systems.mythical</groupId>
+            <artifactId>v26_1_R1</artifactId>
+            <version>${revision}</version>
+        </dependency>
+    </dependencies>
+    
+</project>
